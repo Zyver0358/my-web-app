@@ -14,7 +14,11 @@
   "theme_color": "#000000"
 }
 {
+  "name": "DBD 2D",
+  "short_name": "DBD2D",
+  "start_url": "index.html",
   "display": "standalone",
   "orientation": "landscape",
-  "start_url": "./index.html"
+  "background_color": "#0a0a0a",
+  "theme_color": "#ff0000"
 }
