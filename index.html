@@ -1,225 +1,116 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="manifest" href="manifest.json">
-
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js');
-  }
-</script>
-    <title>DBD 2D - Full Feature Build</title>
+    <title>DBD 2D - Mobile Fixed</title>
     <style>
-    body { 
-        margin: 0; 
-        overflow: hidden; 
-        background: #0a0a0a; 
-        display: flex; 
-        justify-content: center; 
-        align-items: center; 
-        height: 100vh; 
-        width: 100vw;
-        font-family: sans-serif; 
-        touch-action: none; 
-    }
-    
-    /* This makes the game container expand to fit the screen width */
-    #game-container { 
-        position: relative; 
-        width: 100vw; 
-        height: 100vh; 
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
-    
-    canvas { 
-        display: block; 
-        /* This maintains aspect ratio while filling the screen */
-        max-width: 100%; 
-        max-height: 100%; 
-        image-rendering: pixelated; 
-    }
-
-    .ui { position: fixed; top: 10px; left: 10px; color: white; z-index: 100; pointer-events: none; text-shadow: 2px 2px 2px black; font-size: 14px; }
-
-    /* POSITION JOYSTICKS FOR LANDSCAPE */
-    .joystick-container { 
-        display: none; 
-        position: fixed; 
-        bottom: 20px; /* Brought closer to the bottom */
-        left: 0;
-        width: 100%; 
-        justify-content: space-between; 
-        padding: 0 40px; 
-        box-sizing: border-box; 
-        pointer-events: none; 
-        z-index: 1000; 
-    }
-
-    @media (max-width: 1024px) { .joystick-container { display: flex; } }
-
-    .joystick-base { 
-        width: 100px; 
-        height: 100px; 
-        background: rgba(255, 255, 255, 0.1); 
-        border: 2px solid rgba(255, 255, 255, 0.3); 
-        border-radius: 50%; 
-        position: relative; 
-        pointer-events: auto; /* Buttons are clickable, container isn't */
-    }
-
-    .joystick-stick { width: 40px; height: 40px; background: rgba(255, 255, 255, 0.5); border-radius: 50%; position: absolute; top: 30px; left: 30px; pointer-events: none; }
-</style>
+        body { margin: 0; overflow: hidden; background: #000; height: 100vh; width: 100vw; display: flex; justify-content: center; align-items: center; touch-action: none; }
+        canvas { display: block; background: #1a211a; }
+        .ui { position: fixed; top: 10px; left: 10px; color: white; z-index: 100; pointer-events: none; font-family: sans-serif; font-size: 12px; }
+        
+        /* Joystick Styling */
+        .joystick-container { position: fixed; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 30px; box-sizing: border-box; z-index: 1000; pointer-events: none; }
+        .joystick-base { width: 100px; height: 100px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; position: relative; pointer-events: auto; }
+        .joystick-stick { width: 40px; height: 40px; background: rgba(255,255,255,0.5); border-radius: 50%; position: absolute; top: 30px; left: 30px; }
+    </style>
 </head>
 <body>
 
     <div class="ui">
-        <span class="pc-controls"><b>WASD</b> to Move | <b>M1</b> to Attack</span>
-        <span class="mobile-controls" style="display:none;">Use <b>Joysticks</b> to Move & Aim</span><br>
-        <span id="status-text">Trial in Progress...</span>
+        <b>DBD 2D Mobile</b><br>
+        <span id="status">Rotate for Landscape</span>
     </div>
 
-    <div id="game-container">
-        <canvas id="gameCanvas"></canvas>
-    </div>
+    <canvas id="gameCanvas"></canvas>
 
-    <div class="joystick-container" id="mobile-ui">
+    <div class="joystick-container">
         <div id="move-joystick" class="joystick-base"><div class="joystick-stick"></div></div>
-        <div id="aim-joystick" class="joystick-base"><div class="joystick-stick"></div></div>
+        <div id="action-btn" class="joystick-base" style="display:flex; align-items:center; justify-content:center; color:white; font-weight:bold;">ATTACK</div>
     </div>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
-// --- 1. WORLD & SCREEN SETUP ---
-const world = { width: 3000, height: 3000 };
-let screen = { width: window.innerWidth, height: window.innerHeight };
-
-function setupCanvas() {
-    const dpr = window.devicePixelRatio || 1;
-    screen.width = window.innerWidth;
-    screen.height = window.innerHeight;
-
-    canvas.width = screen.width * dpr;
-    canvas.height = screen.height * dpr;
-    canvas.style.width = screen.width + "px";
-    canvas.style.height = screen.height + "px";
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.imageSmoothingEnabled = false;
-}
-window.addEventListener('resize', setupCanvas);
-setupCanvas();
-
-// --- 2. PLAYER & MAP DATA ---
-const player = {
-    x: world.width / 2, 
-    y: world.height / 2,
-    w: 50, h: 100, 
-    speed: 7, 
-    angle: 0
-};
-
-const mapObjects = [
-    { x: 1200, y: 1200, w: 200, h: 70, color: "#444", solid: true },
-    { x: 1400, y: 1100, w: 85, h: 85, color: "#555", solid: true },
-    { x: 1550, y: 1450, w: 30, h: 50, color: "#ff4500", solid: true },
-    { x: 2000, y: 2000, w: 40, h: 60, color: '#e67e22', solid: true }
-];
-
-// --- 3. INPUT HANDLING ---
-const keys = {};
+// --- 1. SETTINGS ---
+const world = { width: 2000, height: 2000 };
+const player = { x: 1000, y: 1000, speed: 5, color: "red" };
 const joyInput = { x: 0, y: 0 };
-window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
-window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
 
-function setupJoystick(id) {
-    const base = document.getElementById(id);
-    const stick = base.querySelector('.joystick-stick');
-    const limit = 40;
-    let touchId = null;
-
-    base.addEventListener("touchstart", e => {
-        e.preventDefault();
-        touchId = e.changedTouches[0].identifier;
-    }, { passive: false });
-
-    document.addEventListener("touchmove", e => {
-        if (touchId === null) return;
-        for (let t of e.touches) {
-            if (t.identifier === touchId) {
-                const rect = base.getBoundingClientRect();
-                const cx = rect.left + rect.width / 2;
-                const cy = rect.top + rect.height / 2;
-                let dx = t.clientX - cx;
-                let dy = t.clientY - cy;
-                const dist = Math.hypot(dx, dy);
-                if (dist > limit) { dx *= limit/dist; dy *= limit/dist; }
-                stick.style.transform = `translate(${dx}px, ${dy}px)`;
-                joyInput.x = dx / limit;
-                joyInput.y = dy / limit;
-            }
-        }
-    }, { passive: false });
-
-    document.addEventListener("touchend", e => {
-        for (let t of e.changedTouches) {
-            if (t.identifier === touchId) {
-                touchId = null;
-                stick.style.transform = `translate(0,0)`;
-                joyInput.x = 0; joyInput.y = 0;
-            }
-        }
-    });
-}
-if (isMobile) setupJoystick('move-joystick');
-
-// --- 4. GAME ENGINE ---
-function update() {
-    let moveX = joyInput.x, moveY = joyInput.y;
-    if (keys['w']) moveY = -1; if (keys['s']) moveY = 1;
-    if (keys['a']) moveX = -1; if (keys['d']) moveX = 1;
-
-    // Movement logic
-    if (Math.abs(moveX) > 0.1 || Math.abs(moveY) > 0.1) {
-        player.x += moveX * player.speed;
-        player.y += moveY * player.speed;
+// --- 2. RESPONSIVE CANVAS ---
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    if (window.innerHeight > window.innerWidth) {
+        document.getElementById('status').innerText = "PLEASE ROTATE PHONE";
+    } else {
+        document.getElementById('status').innerText = "Trial in Progress";
     }
 }
+window.addEventListener('resize', resize);
+resize();
 
-function draw() {
-    ctx.clearRect(0, 0, screen.width, screen.height);
-    ctx.save();
+// --- 3. JOYSTICK LOGIC ---
+const base = document.getElementById('move-joystick');
+const stick = base.querySelector('.joystick-stick');
+
+base.addEventListener('touchstart', (e) => e.preventDefault());
+base.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const touch = e.targetTouches[0];
+    const rect = base.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
     
-    // Camera follow
-    ctx.translate(screen.width/2 - player.x, screen.height/2 - player.y);
+    let dx = touch.clientX - centerX;
+    let dy = touch.clientY - centerY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const max = 40;
 
-    // Draw Grass/Floor
+    if (dist > max) { dx *= max/dist; dy *= max/dist; }
+    
+    stick.style.transform = `translate(${dx}px, ${dy}px)`;
+    joyInput.x = dx / max;
+    joyInput.y = dy / max;
+});
+
+base.addEventListener('touchend', () => {
+    stick.style.transform = `translate(0px, 0px)`;
+    joyInput.x = 0; joyInput.y = 0;
+});
+
+// --- 4. ENGINE ---
+function loop() {
+    // Update
+    player.x += joyInput.x * player.speed;
+    player.y += joyInput.y * player.speed;
+
+    // Draw
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.translate(canvas.width/2 - player.x, canvas.height/2 - player.y);
+
+    // Draw Ground
     ctx.fillStyle = "#1a211a";
     ctx.fillRect(0, 0, world.width, world.height);
 
-    // Draw Objects
-    mapObjects.forEach(obj => {
-        ctx.fillStyle = obj.color;
-        ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
-    });
+    // Draw Some "Trees" (Boxes) so you can see movement
+    ctx.fillStyle = "#444";
+    ctx.fillRect(800, 800, 50, 50);
+    ctx.fillRect(1200, 900, 50, 50);
+    ctx.fillRect(1000, 1200, 50, 50);
 
-    // Draw Player (Killer)
-    ctx.fillStyle = "red";
-    ctx.fillRect(player.x - 25, player.y - 50, 50, 100);
+    // Draw Player
+    ctx.fillStyle = player.color;
+    ctx.fillRect(player.x - 20, player.y - 40, 40, 80);
 
     ctx.restore();
+    requestAnimationFrame(loop);
 }
-
-function gameLoop() {
-    update();
-    draw();
-    requestAnimationFrame(gameLoop);
-}
-gameLoop();
+loop();
 </script>
 </body>
 </html>
