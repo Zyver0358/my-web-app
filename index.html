@@ -297,22 +297,61 @@ function update() {
     }
 }
 
+// --- UPDATED SETUP CANVAS ---
 function setupCanvas() {
     const dpr = window.devicePixelRatio || 1;
-
-    // Use the full window size
+    
+    // Get the actual visible area of the mobile screen
     screen.width = window.innerWidth;
     screen.height = window.innerHeight;
 
-    // Set internal resolution (The 'game world' view)
-    canvas.width = Math.floor(screen.width * dpr);
-    canvas.height = Math.floor(screen.height * dpr);
-
+    canvas.width = screen.width * dpr;
+    canvas.height = screen.height * dpr;
+    
     canvas.style.width = screen.width + "px";
     canvas.style.height = screen.height + "px";
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
+}
+
+// --- UPDATED DRAW FUNCTION (WITH FALLBACKS) ---
+function draw() {
+    ctx.clearRect(0, 0, screen.width, screen.height);
+    ctx.save();
+    
+    // Centers the camera on the player
+    ctx.translate(screen.width/2 - player.x, screen.height/2 - player.y);
+
+    // Floor (Dark Green/Grey)
+    ctx.fillStyle = "#1a211a";
+    ctx.fillRect(0, 0, world.width, world.height);
+
+    // Draw Map Objects
+    mapObjects.forEach(obj => {
+        const tex = textures[obj.type];
+        // If image exists, draw it. If not, draw a colored box.
+        if (tex && tex.complete && tex.naturalWidth !== 0) {
+            ctx.drawImage(tex, obj.x, obj.y, obj.w, obj.h);
+        } else {
+            ctx.fillStyle = obj.color || "#444";
+            ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+        }
+    });
+
+    // Draw Player
+    ctx.fillStyle = "red"; // Fallback color
+    const currentDir = getPlayerDirection8 ? getPlayerDirection8() : 'down';
+    const activeTexture = playerTextures[currentDir];
+    
+    if (activeTexture && activeTexture.complete && activeTexture.naturalWidth !== 0) {
+        ctx.drawImage(activeTexture, player.x - player.w/2, player.y - player.h/2, player.w, player.h);
+    } else {
+        // This draws the red box you see in your PC screenshot
+        ctx.fillRect(player.x - 25, player.y - 50, 50, 100);
+    }
+
+    ctx.restore();
 }
 setupCanvas();
 window.onresize = setupCanvas;
